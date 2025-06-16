@@ -1,0 +1,41 @@
+#! /opt/karton/.karton/bin/python3
+
+
+# Inspiration from: https://github.com/CERT-Polska/karton-playground
+# Requires: pip install flare-capa
+# Download rules: https://github.com/mandiant/capa-rules/releases
+
+
+from karton.core import Karton, Task, Resource
+import subprocess
+
+
+class Capa(Karton):
+    """
+    Runs a Capa analysis on the incoming sample and sets attribute based on result
+    """
+
+    identity = "karton.capa"
+    filters = [{"type": "sample", "stage": "recognized"}]
+
+    def process(self, task: Task) -> None:
+        # Get the incoming sample
+        sample_resource = task.get_resource("sample")
+
+        # Log with self.log
+        self.log.info(f"Starting Capa analysis on: {sample_resource.name}")
+
+        # Download the resource to a temporary file
+        with sample_resource.download_temporary_file() as sample_file:
+            output = subprocess.check_output(["capa", "-r", "/opt/karton/capa-rules-9.1.0/", sample_file.name])
+            
+        # Send our results for further processing or reporting
+        task = Task(
+            {"type": "sample", "stage": "analyzed"},
+            payload={"parent": sample_resource, "sample": Resource(f"capa_{sample_resource.name}", output)},
+        )
+        self.send_task(task)
+
+
+if __name__ == "__main__":
+    Capa.main()
